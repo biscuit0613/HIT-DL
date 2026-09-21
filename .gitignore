@@ -1,0 +1,9 @@
+lab*/__pycache__/
+*/figures/
+*/results/
+.venv/
+.claude/
+demo_labs/SST-2/*
+demo_labs/data/*
+demo_labs/bert_localpath/*
+
