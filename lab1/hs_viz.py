@@ -5,6 +5,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 from sklearn.metrics import confusion_matrix
@@ -53,10 +54,11 @@ def plot_ranked_bar(summaries, path):
 
 def plot_boxplot(summaries, path, top_n=12):
     rows = sorted(summaries, key=lambda r: r["mean_accuracy"], reverse=True)[:top_n]
-    fig, ax = plt.subplots(figsize=(11, 5))
+    fig, ax = plt.subplots(figsize=(12, 5.4))
     data = [[f["accuracy"] for f in r["folds"]] for r in rows]
-    labels = [f"h={r['hidden_size']} d={r['dropout']:.1f}\nlr={r['lr']:.0e} wd={r['weight_decay']:.0e}"
-              for r in rows]
+    # 四个超参数分三行写：挤成两行时 lr/wd 会与相邻刻度的标签横向重叠
+    labels = [f"h={r['hidden_size']} d={r['dropout']:.1f}\n"
+              f"lr={r['lr']:.0e}\nwd={r['weight_decay']:.0e}" for r in rows]
     bp = ax.boxplot(data, tick_labels=labels, patch_artist=True, widths=0.6)
     for box in bp["boxes"]:
         box.set(facecolor="#a8c4e0", edgecolor="#1f3f5f", linewidth=0.7)
@@ -68,7 +70,7 @@ def plot_boxplot(summaries, path, top_n=12):
                    vals, s=10, color="#1f3f5f", alpha=0.75, zorder=3)
     ax.set_ylabel("各折验证准确率")
     ax.set_title(f"交叉验证准确率最高的 {top_n} 个组合（黑点为单折结果）")
-    ax.tick_params(axis="x", labelsize=7.5)
+    ax.tick_params(axis="x", labelsize=7)
     ax.grid(axis="y", alpha=0.25)
     fig.tight_layout()
     fig.savefig(path)
@@ -134,12 +136,16 @@ def plot_marginal_effects(summaries, path):
 
 
 def plot_loss_curves(best_record, path):
-    fig, ax = plt.subplots(figsize=(7.5, 4.6))
+    fig, ax = plt.subplots(figsize=(8.2, 4.8))
     train_curves = [np.array(f["history"]["train_loss"]) for f in best_record["folds"]]
     val_curves = [np.array(f["history"]["val_loss"]) for f in best_record["folds"]]
+    # 各折细线用浅色虚线，折均值用深色实线加白描边压在上层：仅靠透明度区分时
+    # 两者会糊成一片，靠"线型 + 明度 + 描边"三重差异才分得开。
     for tc, vc in zip(train_curves, val_curves):
-        ax.plot(range(1, len(tc) + 1), tc, color="#3b6ea5", alpha=0.22, linewidth=0.9)
-        ax.plot(range(1, len(vc) + 1), vc, color="#c0392b", alpha=0.22, linewidth=0.9)
+        ax.plot(range(1, len(tc) + 1), tc, color="#8fb4d6", alpha=0.85,
+                linewidth=0.8, linestyle=(0, (4, 2)), zorder=2)
+        ax.plot(range(1, len(vc) + 1), vc, color="#e2a79c", alpha=0.85,
+                linewidth=0.8, linestyle=(0, (4, 2)), zorder=2)
 
     def mean_curve(curves):
         longest = max(len(c) for c in curves)
@@ -148,14 +154,17 @@ def plot_loss_curves(best_record, path):
             padded[i, :len(c)] = c
         return np.nanmean(padded, axis=0)
 
+    halo = [pe.withStroke(linewidth=3.6, foreground="white")]
     mt, mv = mean_curve(train_curves), mean_curve(val_curves)
-    ax.plot(range(1, len(mt) + 1), mt, color="#1f3f5f", linewidth=2.0, label="训练损失(折均值)")
-    ax.plot(range(1, len(mv) + 1), mv, color="#8e1b10", linewidth=2.0, label="早停验证损失(折均值)")
+    ax.plot(range(1, len(mt) + 1), mt, color="#12314d", linewidth=2.4,
+            path_effects=halo, zorder=5, label="训练损失(折均值)")
+    ax.plot(range(1, len(mv) + 1), mv, color="#8e1b10", linewidth=2.4,
+            path_effects=halo, zorder=5, label="早停验证损失(折均值)")
     ax.set_xlabel("epoch")
     ax.set_ylabel("交叉熵损失")
-    ax.set_title("最佳超参数组合的损失曲线（细线为各折自身曲线）")
+    ax.set_title("最佳超参数组合的损失曲线（虚线为各折自身曲线）")
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.legend()
+    ax.legend(framealpha=0.95)
     ax.grid(alpha=0.25)
     fig.tight_layout()
     fig.savefig(path)

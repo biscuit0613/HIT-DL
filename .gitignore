@@ -6,4 +6,5 @@ lab*/__pycache__/
 demo_labs/SST-2/*
 demo_labs/data/*
 demo_labs/bert_localpath/*
+*.pdf
 

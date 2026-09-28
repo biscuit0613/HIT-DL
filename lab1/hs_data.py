@@ -55,11 +55,18 @@ def build_folds(texts, labels, cfg):
     之间的差距"有没有超过"划分本身的波动"——两者量级相当时排名就不能当真。
     特征拟合与内层切分都与超参数无关，所以每折只做一次，所有组合复用。
 
-    以 5 折 x 2 次重复为例，每次划分产出的对象与形状：
-        train_idx / val_idx        (53879,) / (13470,) int64
-        fit_texts / apply_texts    list[str]，53879 / 13470 句
-        y_fit / y_val              (53879,) / (13470,)
-        53879 + 13470 = 67349
+    一折之内有三份互不相交的数据，各自只干一件事：
+        X_inner  48491 句  训练折的 90%，前向反向、更新权重
+        X_early   5388 句  训练折的 10%，只用于早停判定与学习率调度
+        X_val    13470 句  整折留出，训练结束后评一次分
+        48491 + 5388 + 13470 = 67349，不重不漏
+
+    外层折既不参与梯度更新，也不参与"什么时候停"的决策——后者一旦沾上，
+    那个折就不再是模型没见过的数据，交叉验证分数会被系统性抬高。代价是
+    训练样本少了 10%，换来的是外层评分没被选择过程污染。
+
+    注意外层折仍在 36 个组合之间用于排名，所以它是选择集而非无偏测试集，
+    真正的泛化估计要看另外留出的 872 句测试集。
     """
     splitter = RepeatedStratifiedKFold(
         n_splits=cfg["n_splits"], n_repeats=cfg["n_repeats"], random_state=cfg["seed"]
@@ -80,6 +87,9 @@ def build_folds(texts, labels, cfg):
             random_state=cfg["seed"] + fold_id,
         )
         X_fit, X_val, vec = build_feature_matrices(fit_texts, apply_texts, cfg)
+        # 已知的一处不严格：TF-IDF 在整个训练折上拟合，含被切作早停集的
+        # 那 10%，其词频进了 IDF。这只影响"停在哪一轮"，不影响外层评分
+        # ——外层折的词频从未参与拟合。要更严格应只用 inner_idx 拟合。
 
         folds.append(
             {

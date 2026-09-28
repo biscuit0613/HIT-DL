@@ -31,14 +31,20 @@
 
 // 图表编号一律写在标题文字里（如「表 4-3」），因此关掉 Typst 的自动编号
 #set figure(numbering: none)
+// 表题在上、图题在下
+#show figure.where(kind: table): set figure(gap: 0.7em)
+#set figure(gap: 0.7em)
+#show figure.where(kind: table): set figure.caption(position: top)
 #show table: set text(size: 9.5pt)
 
 #align(center)[
-  #v(3.6cm)
+  #v(1.5cm)
   #text(size: 25pt, weight: "bold")[《深度学习》实验报告]
   #v(1.5cm)
-  #text(size: 17pt)[（第 #experiment-number 次）]
-  #v(3.2cm)
+  #text(size: 20pt)[（第 #experiment-number 次）]
+  #v(6.4cm)
+  #[
+  #show table: set text(size: 15pt)
   #table(
     columns: (3.2cm, 9cm),
     align: left,
@@ -48,6 +54,7 @@
     [学号], [#student-id],
     [姓名], [#student-name],
   )
+  ]
 ]
 
 #pagebreak()
@@ -78,7 +85,7 @@
 + *交叉验证由单次 K 折升级为重复分层 K 折*：示例为单次 5 折。本实验采用`RepeatedStratifiedKFold`做 5 折 × 2 次重复共 10 个划分，分层保证每折类别比例与总体一致，并同时报告平均准确率与各折标准差，降低单次划分偶然性带来的误判。
 + *早停与学习率调度*：示例固定训练 100 轮且无验证集参与。本实验加入`ReduceLROnPlateau`（factor 0.5、patience 2）与基于验证损失的早停（patience 5），并恢复最优权重。早停所用的验证集从每折训练集内部再切出 10%，与外层用于评分的验证折严格分离，避免用评估折选择训练轮次。
 + *评估指标由单一准确率扩展为四项指标加混淆矩阵*：示例只报告`accuracy_score`。本实验同时计算 Accuracy、宏平均 Precision、Recall、F1，并在最终测试集上给出混淆矩阵，便于观察两类是否存在系统性偏向。
-+ *增加独立测试集与最终重训*：示例仅在交叉验证内部循环，没有留出测试集。本实验以交叉验证各折最优轮次的中位数作为固定轮数，在完整 67349 句训练集上重训最佳组合，在 872 句测试集上评估，并保存模型权重。
++ *增加独立测试集与最终重训*：示例仅在交叉验证内部循环，没有留出测试集。本实验以交叉验证各折最优轮次的平均值作为固定轮数，在完整 67349 句训练集上重训最佳组合，在 872 句测试集上评估，并保存模型权重。
 + *joblib 并行搜索与串行/并行耗时对比*：示例为串行的`for`循环。本实验使用 joblib 按超参数组合并行分发训练任务，并实测串行与并行的墙钟耗时与加速比，同时分析该加速比受什么因素制约。
 + *结果可视化与落盘*：示例没有任何绘图。本实验输出 6 张图（组合排名及误差棒、Top-12 箱线图、hidden_size × dropout 热力图、学习率与权重衰减的边际影响、最佳组合损失曲线、测试集混淆矩阵），并把交叉验证汇总与逐折结果写成 CSV、把最佳超参数与测试指标写成 JSON。
 + *稀疏输入格式与批量大小的实现级优化*：示例用稠密小特征，不涉及稀疏输入与显存开销。本实验改用稀疏 TF-IDF 直接接入后实测发现，CUDA 上`torch.sparse.mm`的开销按「次」计而非按数据量计，第一层 50000 × hidden 的参数更新成了主导开销且与批次大小无关。据此把每批张量格式由 COO 换成 CSR（同批量下快 1.3 倍）、把 batch size 由 256 提到 2048，单轮训练由 1425.0 ms 降到 149.2 ms（18.7 倍），并单独验证了放大批量不损失准确率。量化过程与机制分析见 4.6 节。
@@ -147,13 +154,13 @@
   caption: [图 4-1　全部 36 个超参数组合的交叉验证平均准确率（误差棒为 10 折标准差）],
 )
 #figure(
-  image("figures/02_top12_箱线图.png", width: 88%),
+  image("figures/02_top12_箱线图.png", width: 110%),
   caption: [图 4-2　前 12 名组合的 10 折准确率分布],
 )
 
 #figure(
   table(
-    columns: (1.1cm, 1.5cm, 1.6cm, 1.4cm, 1.7cm, 1.9cm, 1.9cm),
+    columns: (1.1cm, 1.5cm, 1.6cm, 1.4cm, 2.5cm, 1.9cm, 1.9cm),
     inset: 5pt,
     align: (center, center, center, center, center, center, center),
     table.header([排名], [hidden], [dropout], [lr], [weight_decay], [平均准确率], [F1(macro)]),
@@ -171,7 +178,7 @@
 
 *最差组合。* `hidden=256`、`dropout=0.0`、`lr=5e-3`、`weight_decay=0`，平均准确率 0.8984。最佳组合相对最差组合提升 *2.06 个百分点*。
 
-*最终重训与测试。* 以各折最优轮次的中位数 17 作为固定轮数，在完整 67349 句训练集上重训（耗时 2.0 s，训练损失由 0.4760 降到 0.1257），再在 872 句测试集上评估，结果见表 4-2 与图 4-3。
+*最终重训与测试。* 以各折最优轮次的平均值 17.4 四舍五入为 17，作为固定轮数，在完整 67349 句训练集上重训（耗时 2.0 s，训练损失由 0.4760 降到 0.1257），再在 872 句测试集上评估，结果见表 4-2 与图 4-3。
 
 #figure(
   table(
@@ -192,7 +199,7 @@
   caption: [图 4-3　测试集混淆矩阵],
 )
 #figure(
-  image("figures/05_最佳组合损失曲线.png", width: 78%),
+  image("figures/05_最佳组合损失曲线.png", width: 100%),
   caption: [图 4-4　最佳组合在折内训练时的训练/早停验证损失曲线],
 )
 
@@ -401,11 +408,11 @@
    - `hidden_size` 与 `dropout` 的取值在本任务上不敏感，把搜索预算分给它们收益很低；更值得搜索的是 TF-IDF 本身的参数（如`min_df`、`ngram_range` 上限、`max_features`）或第一层的稀疏性正则。
    - 并行收益受单卡显存带宽限制，若要显著缩短网格搜索时间，需要换用多卡数据并行，或先把每次更新的固定开销降下来。
 
-= 6 完整实验代码与程序输出
 
 // 程序输出最宽一行约 113 列、代码最长 103 列，纵向页面会溢出，故附录改为横向页
 #set page(flipped: true, margin: 1.8cm)
 #show raw.where(block: true): set text(size: 8pt)
+= 6 完整实验代码与程序输出
 
 == 6.1 主程序：超参数网格搜索与重复分层 K 折交叉验证
 
@@ -459,7 +466,6 @@
 
 = 7 参考文献
 
-+ 课程组. 《深度学习》实验报告要求与实验一说明. 2026.
 + 课程示例程序`demo_labs/lab1-hyper-paramter.py`及数据集`demo_labs/SST-2/`.
 + Socher R, Perelygin A, Wu J, et al. Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank. EMNLP, 2013.（SST-2 数据集出处）
 + Kohavi R. A Study of Cross-Validation and Bootstrap for Accuracy Estimation and Model Selection. IJCAI, 1995.（K 折交叉验证）
