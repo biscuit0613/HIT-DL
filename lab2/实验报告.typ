@@ -217,7 +217,35 @@ return best(beams, key=normalized_score)
   caption: [表 4-1　关键 epoch 的训练指标],
 )
 
-== 4.4 测试集评估与解码策略对比
+== 4.4 BLEU 评估指标原理
+
+BLEU（Bilingual Evaluation Understudy）由 Papineni 等人于 2002 年提出，是机器翻译领域最广泛使用的自动评估指标。其核心思想是：好的译文应与参考译文共享大量 n-gram（连续词/字序列）。
+
+*n-gram 修正精度*：对每个阶数 $n$（通常取 1–4），统计假设译文中出现在参考译文里的 n-gram 数量。为防止模型通过重复高频词刷高分，采用截断计数（clipped count）：同一 n-gram 的匹配次数不超过它在参考译文中出现的次数。$n$ 阶修正精度定义为：
+
+$
+p_n = (sum_k min("count"_k^"hyp", "count"_k^"ref")) / (sum_k "count"_k^"hyp")
+$
+
+其中下标 $k$ 枚举假设译文中所有不同的 n-gram。
+
+*几何平均*：将 4 个阶数的精度取均匀加权对数均值后取指数，得到最终分数：
+
+$
+"BLEU" = "BP" times exp(sum_(n=1)^4 w_n log p_n), quad w_n = 1/4
+$
+
+*简短惩罚（Brevity Penalty, BP）*：n-gram 精度对短句有利（词越少越难出错），为此引入惩罚项压制过短译文：
+
+$
+"BP" = cases(1 & c >= r, e^(1 - r\/c) & c < r)
+$
+
+其中 $c$ 为假设译文总长度，$r$ 为参考译文总长度。当 $c < r$ 时 BP 指数级衰减，只有接近参考长度的译文才能获得满分。
+
+*本实验中的配置*：使用 `sacrebleu` 库计算，`tokenize='zh'` 按字符切分中文（与模型字符级输出一致），`effective_order=True` 仅对实际出现的 n-gram 阶取均值，避免极短句因高阶 n-gram 匹配为零导致 BLEU 恒为 0 的问题。结果乘以 100 以百分制报告（0–100），越高越好。
+
+== 4.5 测试集评估与解码策略对比
 
 在测试集（2000 句）上用贪心解码与 beam search 解码各评估 1000 句，结果见图 4-2。
 
@@ -233,7 +261,7 @@ return best(beams, key=normalized_score)
 
 *代价*：beam search 每步需要扩展 5 个序列并各自计算 decoder，推理耗时约为贪心的 5 倍。在本实验规模下（1000 句测试）耗时可接受；生产环境中需权衡质量与延迟。
 
-== 4.5 交叉注意力可视化
+== 4.6 交叉注意力可视化
 
 图 4-3、4-4、4-5 展示三个测试样例的交叉注意力热图（decoder 最后一层）。横轴为英文 token（空格分词），纵轴为中文字符（生成顺序从上到下），颜色深度表示注意力权重。
 
@@ -258,7 +286,7 @@ return best(beams, key=normalized_score)
 
 *实现技术细节*：PyTorch 的 `TransformerDecoderLayer` 在内部调用 `MultiheadAttention.forward` 时将 `need_weights` 强制设为 `False`，导致直接注册 forward hook 拿不到权重（返回 `None`）。解决方法是在解码前用 `patched_forward` 替换 `last_mha.forward`，在其中强制设置 `need_weights=True` 并将权重写入共享字典；解码完成后在 `finally` 块中恢复原始方法，保证不污染后续调用（`mt_decode.py:72–97`）。
 
-== 4.6 翻译质量的定性分析
+== 4.7 翻译质量的定性分析
 
 表 4-2 给出 5 条测试集样例（beam search 解码），便于直观判断翻译质量。
 
@@ -345,7 +373,7 @@ return best(beams, key=normalized_score)
 
 = 7. 参考文献
 
-+ 课程示例程序 `demo_labs/lab2-sequence-model.py` 及实验要求 `lab2/实验要求.md`.
++ 课程示例程序 `demo_labs/lab2-sequence-model.py`.
 + Vaswani A, Shazeer N, Parmar N, et al. Attention Is All You Need. NeurIPS, 2017.（Transformer 原始论文，本实验模型结构、位置编码与学习率调度的来源）
 + Tiedemann J. OPUS — The Open Parallel Corpus. LREC, 2012.（Opus-100 数据集基础语料）
 + Tiedemann J, Thottingal S. OPUS-MT — Building open translation services for the World. EAMT, 2020.（Helsinki-NLP/opus-100 Hugging Face 数据集）

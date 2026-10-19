@@ -70,7 +70,7 @@ def plot_bleu_comparison():
     print('saved bleu_comparison.png')
 
 
-def plot_attention_heatmap(n_examples=3):
+def plot_attention_heatmap(n_examples=3, min_src_tokens=5, max_src_tokens=14):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     src_vocab = Vocab.load(RESULTS / 'src_vocab.json')
     tgt_vocab = Vocab.load(RESULTS / 'tgt_vocab.json')
@@ -95,13 +95,21 @@ def plot_attention_heatmap(n_examples=3):
     _, _, test_dl, _, _ = build_dataloaders(batch_size=64, min_freq=cfg['min_freq'], max_len=cfg['max_len'],
                                             train_size=cfg['train_size'])
 
-    for idx_fig, (src, tgt, src_texts, tgt_texts) in enumerate(test_dl):
-        if idx_fig >= n_examples:
+    # Opus-100 里混杂大量长 UN 公文句子，直接取前几条会导致热图 token 数过多、
+    # 格子被压缩到肉眼难辨；这里改为挑选源句子长度适中的样例，保证坐标轴标签清晰可读
+    candidates = []
+    for src, tgt, src_texts, tgt_texts in test_dl:
+        for i in range(src.size(0)):
+            n_tok = len(src_texts[i].lower().split())
+            if min_src_tokens <= n_tok <= max_src_tokens:
+                candidates.append((src[i:i+1], src_texts[i], tgt_texts[i]))
+            if len(candidates) >= n_examples:
+                break
+        if len(candidates) >= n_examples:
             break
-        i = 0
-        src_single = src[i:i+1].to(device)
-        ref = tgt_texts[i]
-        src_text = src_texts[i]
+
+    for idx_fig, (src_single, src_text, ref) in enumerate(candidates):
+        src_single = src_single.to(device)
 
         tgt_ids, attn = decode_with_attention(model, src_single, src_vocab, tgt_vocab, device=device)
         pred = tgt_vocab.decode(tgt_ids)
@@ -110,15 +118,18 @@ def plot_attention_heatmap(n_examples=3):
         tgt_tokens = list(pred)  # character-level Chinese tokens
         attn_np = attn.numpy()[:len(tgt_tokens), :len(src_tokens)]
 
-        fig, ax = plt.subplots(figsize=(max(len(src_tokens)*0.4, 6), max(len(tgt_tokens)*0.35, 4)))
+        # 图幅随 token 数增长但设上限，字号固定为较大值，避免长句样例把坐标轴文字挤得看不清
+        fig_w = min(max(len(src_tokens) * 0.55, 6), 9)
+        fig_h = min(max(len(tgt_tokens) * 0.5, 5), 8)
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
         im = ax.imshow(attn_np, cmap='Blues', aspect='auto')
         ax.set_xticks(range(len(src_tokens)))
-        ax.set_xticklabels(src_tokens, rotation=45, ha='right', fontsize=9)
+        ax.set_xticklabels(src_tokens, rotation=45, ha='right', fontsize=11)
         ax.set_yticks(range(len(tgt_tokens)))
-        ax.set_yticklabels(tgt_tokens, fontsize=9, fontfamily='Noto Sans CJK SC')
-        ax.set_xlabel('Source (EN)', fontsize=10)
-        ax.set_ylabel('Target (ZH)', fontsize=10)
-        ax.set_title(f'Cross-Attention Heatmap #{idx_fig+1}', fontsize=11)
+        ax.set_yticklabels(tgt_tokens, fontsize=11, fontfamily='Noto Sans CJK SC')
+        ax.set_xlabel('Source (EN)', fontsize=12)
+        ax.set_ylabel('Target (ZH)', fontsize=12)
+        ax.set_title(f'Cross-Attention Heatmap #{idx_fig+1}', fontsize=13)
         plt.colorbar(im, ax=ax)
         plt.tight_layout()
         plt.savefig(FIGURES / f'attention_{idx_fig+1}.png', dpi=150)
