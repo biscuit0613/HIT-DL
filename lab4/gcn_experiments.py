@@ -19,8 +19,6 @@ MODEL_CONFIGS = {
                 lr=0.01, weight_decay=5e-4, epochs=200),
     "gcn": dict(model="gcn", hidden=16, layers=2, dropout=0.5,
                 lr=0.01, weight_decay=5e-4, epochs=200),
-    "sage": dict(model="sage", hidden=16, layers=2, dropout=0.5,
-                 lr=0.01, weight_decay=5e-4, epochs=200),
     "gat": dict(model="gat", hidden=8, layers=2, heads=8, dropout=0.6,
                 lr=0.005, weight_decay=5e-4, epochs=200),
 }
@@ -66,7 +64,7 @@ def print_summary(name, runs):
 
 
 def run_main(data, device, seeds):
-    print("\n===== 主实验：MLP / GCN / GraphSAGE / GAT =====")
+    print("\n===== 主实验：MLP / GCN / GAT =====")
     all_runs = {}
     all_logits = {}
     best_models = {}
@@ -197,7 +195,7 @@ def run_sweeps(data, device):
 def run_label_rate(data_cpu, device, seeds):
     print("\n===== 标签率实验 =====")
     rates = [1, 2, 5, 10, 20, 40]
-    models = ["mlp", "gcn", "sage", "gat"]
+    models = ["mlp", "gcn", "gat"]
     records = []
     for rate in rates:
         for seed in seeds:
@@ -243,7 +241,7 @@ def run_label_rate(data_cpu, device, seeds):
 def run_robustness(data_cpu, device, seeds):
     print("\n===== 图结构鲁棒性实验 =====")
     ratios = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9]
-    models = ["mlp", "gcn", "sage", "gat"]
+    models = ["mlp", "gcn", "gat"]
     records = []
     for ratio in ratios:
         for seed in seeds:

@@ -1,8 +1,8 @@
-"""Cora 节点分类使用的四种模型：MLP、GCN、GraphSAGE、GAT。"""
+"""Cora 节点分类使用的三种模型：MLP、GCN、GAT。"""
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GATConv, GCNConv, SAGEConv
+from torch_geometric.nn import GATConv, GCNConv
 
 
 class MLP(torch.nn.Module):
@@ -37,31 +37,6 @@ class GCN(torch.nn.Module):
         dims = [in_channels] + [hidden_channels] * (num_layers - 1) + [out_channels]
         self.convs = torch.nn.ModuleList(
             GCNConv(dims[i], dims[i + 1]) for i in range(len(dims) - 1)
-        )
-        self.dropout = dropout
-
-    def forward(self, x, edge_index, return_hidden=False):
-        hidden = []
-        for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index)
-            if i < len(self.convs) - 1:
-                x = F.relu(x)
-                hidden.append(x)
-                x = F.dropout(x, p=self.dropout, training=self.training)
-        return (x, hidden) if return_hidden else x
-
-    def embed(self, x, edge_index):
-        _, hidden = self.forward(x, edge_index, return_hidden=True)
-        return hidden[0] if hidden else x
-
-
-class GraphSAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels,
-                 num_layers=2, dropout=0.5, **kwargs):
-        super().__init__()
-        dims = [in_channels] + [hidden_channels] * (num_layers - 1) + [out_channels]
-        self.convs = torch.nn.ModuleList(
-            SAGEConv(dims[i], dims[i + 1]) for i in range(len(dims) - 1)
         )
         self.dropout = dropout
 
@@ -140,8 +115,6 @@ def build_model(name, in_channels, out_channels, cfg):
         return MLP(in_channels, out_channels=out_channels, **common)
     if name == "gcn":
         return GCN(in_channels, out_channels=out_channels, **common)
-    if name == "sage":
-        return GraphSAGE(in_channels, out_channels=out_channels, **common)
     if name == "gat":
         return GAT(in_channels, out_channels=out_channels,
                    heads=cfg.get("heads", 8), **common)

@@ -18,12 +18,11 @@ RESULTS = "results"
 FIGURES = "figures"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODEL_LABELS = {"mlp": "MLP", "gcn": "GCN", "sage": "GraphSAGE", "gat": "GAT"}
-MODEL_ORDER = ["mlp", "gcn", "sage", "gat"]
+MODEL_LABELS = {"mlp": "MLP", "gcn": "GCN", "gat": "GAT"}
+MODEL_ORDER = ["mlp", "gcn", "gat"]
 MODEL_COLORS = {
     "mlp": "#7f7f7f",
     "gcn": "#1f77b4",
-    "sage": "#2ca02c",
     "gat": "#d62728",
 }
 CLASS_COLORS = plt.cm.tab10(np.arange(len(CLASS_NAMES)))
@@ -132,7 +131,7 @@ def plot_main_curves(main):
     runs = main["runs"]
     epochs = np.arange(1, len(runs["gcn"][0]["history"]["train_acc"]) + 1)
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7.2), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 3.8), sharex=True, sharey=True)
     for ax, model in zip(axes.ravel(), MODEL_ORDER):
         for key, label, color in (
             ("train_acc", "训练集", "#9e9e9e"),
@@ -149,11 +148,10 @@ def plot_main_curves(main):
         ax.set_title(MODEL_LABELS[model])
         ax.grid(alpha=0.25)
         ax.legend(loc="lower right")
-    for ax in axes[-1]:
+    for ax in axes:
         ax.set_xlabel("Epoch")
-    for ax in axes[:, 0]:
-        ax.set_ylabel("准确率")
-    fig.suptitle("四种模型的训练/验证/测试准确率（10 个随机种子，阴影为 ±1 标准差）",
+    axes[0].set_ylabel("准确率")
+    fig.suptitle("三种模型的训练/验证/测试准确率（10 个随机种子，阴影为 ±1 标准差）",
                  fontsize=12)
     fig.tight_layout()
     save_fig(fig, "curves_accuracy.png")
@@ -243,7 +241,7 @@ def plot_per_class_f1(main):
 
 
 def plot_confusions(main):
-    fig, axes = plt.subplots(2, 2, figsize=(11, 9.5))
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.4))
     for ax, model in zip(axes.ravel(), MODEL_ORDER):
         confs = []
         for run in main["runs"][model]:
@@ -264,7 +262,7 @@ def plot_confusions(main):
         ax.set_xlabel("预测类别")
         ax.set_ylabel("真实类别")
         ax.set_title(MODEL_LABELS[model])
-    fig.colorbar(im, ax=axes.ravel().tolist(), shrink=0.8,
+    fig.colorbar(im, ax=axes.ravel().tolist(), shrink=0.85,
                  label="按真实类别归一化的比例")
     fig.suptitle("测试集混淆矩阵（10 个种子平均；C0–C6 依次为 "
                  + " / ".join(CLASS_NAMES) + "）", fontsize=11)
@@ -450,10 +448,10 @@ def plot_degree_buckets(data, main):
             acc[model].append(float((pred == y[idx]).mean()))
 
     x = np.arange(len(buckets))
-    width = 0.2
+    width = 0.25
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
     for offset, model in enumerate(MODEL_ORDER):
-        axes[0].bar(x + (offset - 1.5) * width, acc[model], width,
+        axes[0].bar(x + (offset - 1.0) * width, acc[model], width,
                     label=MODEL_LABELS[model], color=MODEL_COLORS[model],
                     alpha=0.9)
     axes[0].set_xticks(x)
@@ -462,12 +460,13 @@ def plot_degree_buckets(data, main):
     axes[0].set_xlabel("节点度区间")
     axes[0].set_ylabel("测试准确率")
     axes[0].set_title("不同度区间上的准确率（10 种子平均 logits）")
-    axes[0].legend(ncol=4, loc="lower right")
+    axes[0].legend(ncol=3, loc="lower right")
     axes[0].grid(axis="y", alpha=0.25)
 
-    for model in ("gcn", "sage", "gat"):
+    graph_models = ["gcn", "gat"]
+    for offset, model in enumerate(graph_models):
         delta = np.array(acc[model]) - np.array(acc["mlp"])
-        axes[1].bar(x + (MODEL_ORDER.index(model) - 1.5) * width, delta, width,
+        axes[1].bar(x + (offset - 0.5) * width, delta, width,
                     label=f"{MODEL_LABELS[model]} − MLP",
                     color=MODEL_COLORS[model], alpha=0.9)
     axes[1].axhline(0, color="k", lw=1)
@@ -476,14 +475,14 @@ def plot_degree_buckets(data, main):
     axes[1].set_xlabel("节点度区间")
     axes[1].set_ylabel("相对 MLP 的准确率增益")
     axes[1].set_title("图结构收益按度分布")
-    axes[1].legend(ncol=3, loc="upper right")
+    axes[1].legend(ncol=2, loc="upper right")
     axes[1].grid(axis="y", alpha=0.25)
     fig.tight_layout()
     save_fig(fig, "degree_buckets.png")
 
 
 def plot_embeddings(data, best_models):
-    fig, axes = plt.subplots(2, 2, figsize=(10.5, 9))
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.8))
     for ax, model_name in zip(axes.ravel(), MODEL_ORDER):
         entry = best_models[model_name]
         model = build_model(model_name, data.num_features,
@@ -502,11 +501,11 @@ def plot_embeddings(data, best_models):
         ax.set_title(f"{MODEL_LABELS[model_name]}（seed {entry['seed']}）")
         ax.set_xticks([])
         ax.set_yticks([])
-    handles, labels = axes[0, 0].get_legend_handles_labels()
+    handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=4, frameon=False,
                fontsize=8)
     fig.suptitle("第一层节点表示的 t-SNE 可视化", fontsize=12)
-    fig.tight_layout(rect=(0, 0.06, 1, 0.97))
+    fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     save_fig(fig, "embeddings.png")
 
 

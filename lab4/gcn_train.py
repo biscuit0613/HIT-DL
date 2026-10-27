@@ -159,7 +159,7 @@ def run_single(cfg, data, seed, device="cuda", verbose=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="gcn",
-                        choices=["mlp", "gcn", "sage", "gat"])
+                        choices=["mlp", "gcn", "gat"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--hidden", type=int, default=16)
